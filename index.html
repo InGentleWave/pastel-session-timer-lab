@@ -463,6 +463,7 @@ button.title-btn:disabled { opacity: 1; }
         h('div', { 'class': 'row actions' }, [
           btn('열기', 'mint small', function () { go('session', s.id); }),
           btn('이름 변경', 'small', function () { renameSession(s); }),
+          btn('복제', 'small', function () { duplicateSession(s); }),
           btn('삭제', 'small danger', function () { deleteSession(s); })
         ])
       ]));
@@ -615,6 +616,18 @@ button.title-btn:disabled { opacity: 1; }
       if (!n) return;
       s.name = n; save(); render();
     });
+  }
+  /* 세션 복제: 라벨 구성과 순서만 복사. 진행 시간·상태·기록은 복사하지 않음 */
+  function duplicateSession(s) {
+    ask({ title: '세션 복제', message: '라벨 구성만 복사합니다. 기록은 복사되지 않습니다.', input: s.name + ' 복사', ok: '복제' })
+      .then(function (name) {
+        if (!name) return;
+        var copy = mkSession(name);
+        copy.items = s.items.map(function (it) { return mkItem(it.label); });
+        var idx = state.sessions.indexOf(s);
+        state.sessions.splice(idx + 1, 0, copy);
+        save(); render();
+      });
   }
   function deleteSession(s) {
     ask({ title: '세션 삭제', message: '"' + s.name + '" 세션과 기록 ' + s.records.length + '건을 삭제합니다.', ok: '삭제', danger: true })
