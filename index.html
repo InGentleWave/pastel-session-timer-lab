@@ -68,12 +68,24 @@ button.title-btn:disabled { opacity: 1; }
 .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
 .controls .span3 { grid-column: 1 / -1; }
 .actions { margin-top: 10px; }
+.move { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.move button { padding: 0 4px; }
+.row + .move { margin-top: 8px; }
 .add { margin-bottom: 12px; }
 .empty { color: var(--sub); text-align: center; padding: 28px 0; }
 .foot { margin-top: 16px; }
 .rec-list { margin-top: 8px; }
 .rec-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px dashed var(--line); font-size: 15px; }
 .rec-row .t { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-head, .stat-vals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: right;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-head { margin-top: 8px; color: var(--sub); font-size: 13px; }
+.stat-row { padding: 6px 0; border-top: 1px dashed var(--line); }
+.stat-row .lbl { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; }
+.stat-row .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-row .n { color: var(--sub); font-size: 13px; white-space: nowrap; }
+.stat-row.all .lbl { font-weight: 700; }
+.stat-vals { font-size: 15px; }
 .lockbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
   padding: 8px 14px calc(10px + env(safe-area-inset-bottom));
   background: rgba(241, 245, 250, 0.96); border-top: 1px solid var(--line); }
@@ -102,7 +114,7 @@ button.title-btn:disabled { opacity: 1; }
 (function () {
   'use strict';
 
-  var APP_VERSION = '2.0.0';
+  var APP_VERSION = '2.2.0';
   var KEY = 'session-stopwatch-v2';
   var OLD_KEY = 'session-stopwatch-v1';
   var HOLD_MS = 1000;
@@ -314,6 +326,40 @@ button.title-btn:disabled { opacity: 1; }
     clearRun(s);
     return rec;
   }
+  /* 기록 통계: 세션 전체·라벨별 최소/최대/평균. 0초 항목(시작하지 않았거나 대기에서 정지한 라벨)은 제외 */
+  function statOf(list) {
+    if (!list.length) return null;
+    var min = list[0], max = list[0], sum = 0;
+    list.forEach(function (v) { if (v < min) min = v; if (v > max) max = v; sum += v; });
+    return { n: list.length, min: min, max: max, avg: sum / list.length };
+  }
+  /* 기록에는 라벨 이름만 있으므로 이름으로 묶음. 한 세션에 같은 이름이 여러 개면 순서대로 (2), (3)을 붙여 구분 */
+  function labelKeys(labels) {
+    var seen = Object.create(null);
+    return labels.map(function (l) {
+      seen[l] = (seen[l] || 0) + 1;
+      return { key: JSON.stringify([l, seen[l]]), name: seen[l] > 1 ? l + ' (' + seen[l] + ')' : l };
+    });
+  }
+  function recordStats(s) {
+    var rows = Object.create(null), order = [], totals = [];
+    function row(k) {
+      if (!rows[k.key]) { rows[k.key] = { name: k.name, ms: [] }; order.push(k.key); }
+      return rows[k.key];
+    }
+    /* 현재 라벨은 기록이 없어도 표시. 이름이 바뀌었거나 삭제된 라벨은 시간이 있을 때만 뒤에 표시 */
+    labelKeys(s.items.map(function (it) { return it.label; })).forEach(function (k) { row(k); });
+    s.records.forEach(function (r) {
+      if (r.total > 0) totals.push(r.total);
+      var keys = labelKeys(r.items.map(function (x) { return x.label; }));
+      r.items.forEach(function (x, i) { if (x.ms > 0) row(keys[i]).ms.push(x.ms); });
+    });
+    return {
+      count: s.records.length,
+      total: statOf(totals),
+      labels: order.map(function (k) { return { name: rows[k].name, stat: statOf(rows[k].ms) }; })
+    };
+  }
   /* 편집 모드의 라벨 초기화: 완료된 라벨도 대기로 되돌림 */
   function resetItem(s, it) {
     it.state = 'idle'; it.elapsed = 0; it.runningSince = null;
@@ -321,10 +367,10 @@ button.title-btn:disabled { opacity: 1; }
     if (!hasProgress(s)) s.runStartedAt = null;
     return true;
   }
-  function moveItem(s, idx, d) {
-    var j = idx + d;
-    if (j < 0 || j >= s.items.length) return false;
-    var t = s.items[idx]; s.items[idx] = s.items[j]; s.items[j] = t;
+  /* 순서 이동: from 위치의 항목을 to 위치로 (라벨·세션 공용, 맨 위·맨 아래 포함) */
+  function moveIn(arr, from, to) {
+    if (from < 0 || from >= arr.length || to < 0 || to >= arr.length || from === to) return false;
+    arr.splice(to, 0, arr.splice(from, 1)[0]);
     return true;
   }
 
@@ -418,7 +464,11 @@ button.title-btn:disabled { opacity: 1; }
     cancelHold();
     while (root.firstChild) root.removeChild(root.firstChild);
     var s = state.ui.sid ? findSession(state.ui.sid) : null;
-    if (!s) { state.ui.sid = null; state.ui.view = 'list'; state.ui.edit = false; }
+    if (!s) {
+      /* 세션을 찾지 못해 목록으로 돌아올 때만 편집 해제. 목록 화면의 순서 변경 모드는 유지 */
+      if (state.ui.view !== 'list') state.ui.edit = false;
+      state.ui.sid = null; state.ui.view = 'list';
+    }
     document.body.className = state.ui.locked ? 'locked' : '';
     if (!s) renderList(root);
     else if (state.ui.view === 'records') renderRecords(root, s);
@@ -441,26 +491,43 @@ button.title-btn:disabled { opacity: 1; }
     return hasProgress(s) ? '실행 중인 라벨 없음' : '대기';
   }
 
+  /* 순서 이동 버튼: 맨 위, 위, 아래, 맨 아래 */
+  function moveButtons(arr, idx, cls) {
+    var last = arr.length - 1;
+    function mv(label, to, off) {
+      return btn(label, 'small', function () { act(function () { return moveIn(arr, idx, to); }); }, { disabled: off });
+    }
+    return h('div', { 'class': cls }, [
+      mv('맨 위', 0, idx === 0), mv('위', idx - 1, idx === 0),
+      mv('아래', idx + 1, idx === last), mv('맨 아래', last, idx === last)
+    ]);
+  }
   function renderList(root) {
+    /* 목록 화면에서는 ui.edit를 순서 변경 모드로 사용. 화면을 옮기면 go()에서 해제됨 */
+    var order = state.ui.edit;
     root.appendChild(h('div', { 'class': 'bar' }, [
       h('h1', { text: '세션 스톱워치' }),
+      btn(order ? '완료' : '순서 변경', order ? 'mint small' : 'small', function () { state.ui.edit = !state.ui.edit; render(); },
+        { disabled: !order && state.sessions.length < 2 }),
       btn('잠금', 'sky small', lockApp)
     ]));
     root.appendChild(h('div', { 'class': 'add' }, [btn('세션 추가', 'mint tall block', addSession)]));
     if (!state.sessions.length) {
       root.appendChild(h('div', { 'class': 'empty', text: '세션이 없습니다. "세션 추가"를 누르십시오.' }));
     }
-    state.sessions.forEach(function (s) {
+    state.sessions.forEach(function (s, idx) {
       var run = runningItem(s), p = pausedItem(s);
+      var info = [
+        h('div', { 'class': 'name', text: s.name }),
+        h('div', { 'class': 'sub', text: statusText(s) + ' · 기록 ' + s.records.length + '건' })
+      ];
       root.appendChild(h('div', { 'class': 'card' + (run ? ' running' : (p ? ' paused' : '')) }, [
         h('div', { 'class': 'row' }, [
-          btn([
-            h('div', { 'class': 'name', text: s.name }),
-            h('div', { 'class': 'sub', text: statusText(s) + ' · 기록 ' + s.records.length + '건' })
-          ], 'title-btn grow', function () { go('session', s.id); }),
+          /* 순서 변경 중에는 카드 제목을 눌러도 세션이 열리지 않음 */
+          order ? h('div', { 'class': 'grow' }, info) : btn(info, 'title-btn grow', function () { go('session', s.id); }),
           liveTime('time', function (now) { return sessionMs(s, now); })
         ]),
-        h('div', { 'class': 'row actions' }, [
+        order ? moveButtons(state.sessions, idx, 'move actions') : h('div', { 'class': 'row actions' }, [
           btn('열기', 'mint small', function () { go('session', s.id); }),
           btn('이름 변경', 'small', function () { renameSession(s); }),
           btn('복제', 'small', function () { duplicateSession(s); }),
@@ -520,12 +587,13 @@ button.title-btn:disabled { opacity: 1; }
             { disabled: it.state === 'done' })
         ]);
       } else {
-        actions = h('div', { 'class': 'row wrap actions' }, [
-          btn('이름', 'small', function () { renameItem(it); }),
-          btn('위', 'small', function () { act(function () { return moveItem(s, idx, -1); }); }, { disabled: idx === 0 }),
-          btn('아래', 'small', function () { act(function () { return moveItem(s, idx, 1); }); }, { disabled: idx === s.items.length - 1 }),
-          btn('초기화', 'small', function () { confirmResetItem(s, it); }, { disabled: it.state === 'idle' && it.elapsed === 0 }),
-          btn('삭제', 'small danger', function () { deleteItem(s, it); }, { disabled: it.state === 'running' || it.state === 'paused' })
+        actions = h('div', { 'class': 'actions' }, [
+          h('div', { 'class': 'row wrap' }, [
+            btn('이름', 'small', function () { renameItem(it); }),
+            btn('초기화', 'small', function () { confirmResetItem(s, it); }, { disabled: it.state === 'idle' && it.elapsed === 0 }),
+            btn('삭제', 'small danger', function () { deleteItem(s, it); }, { disabled: it.state === 'running' || it.state === 'paused' })
+          ]),
+          moveButtons(s.items, idx, 'move')
         ]);
       }
       root.appendChild(h('div', { 'class': 'card ' + it.state }, [head, actions]));
@@ -533,6 +601,22 @@ button.title-btn:disabled { opacity: 1; }
     if (edit) root.appendChild(h('div', { 'class': 'foot' }, [btn('라벨 추가', 'mint tall block', function () { addItem(s); })]));
   }
 
+  function renderStats(root, s) {
+    var st = recordStats(s);
+    function line(name, x, cls) {
+      var v = x ? [fmt(x.min), fmt(x.max), fmt(x.avg)] : ['-', '-', '-'];
+      return h('div', { 'class': 'stat-row' + (cls ? ' ' + cls : '') }, [
+        h('div', { 'class': 'lbl' }, [h('span', { 'class': 'nm', text: name }), h('span', { 'class': 'n', text: (x ? x.n : 0) + '회' })]),
+        h('div', { 'class': 'stat-vals' }, v.map(function (t) { return h('span', { text: t }); }))
+      ]);
+    }
+    root.appendChild(h('div', { 'class': 'card stats' }, [
+      h('div', { 'class': 'name', text: '통계' }),
+      h('div', { 'class': 'sub', text: '기록 ' + st.count + '건 기준 · 0초 항목 제외' }),
+      h('div', { 'class': 'stat-head' }, [h('span', { text: '최소' }), h('span', { text: '최대' }), h('span', { text: '평균' })]),
+      line('세션 전체', st.total, 'all')
+    ].concat(st.labels.map(function (l) { return line(l.name, l.stat); }))));
+  }
   function renderRecords(root, s) {
     root.appendChild(h('div', { 'class': 'bar' }, [
       btn('세션', 'small', function () { go('session', s.id); }),
@@ -541,6 +625,8 @@ button.title-btn:disabled { opacity: 1; }
     ]));
     if (!s.records.length) {
       root.appendChild(h('div', { 'class': 'empty', text: '저장된 기록이 없습니다. 세션 화면에서 "세션 종료"를 누르면 저장됩니다.' }));
+    } else {
+      renderStats(root, s);
     }
     s.records.forEach(function (r) {
       root.appendChild(h('div', { 'class': 'card' }, [
@@ -754,7 +840,7 @@ button.title-btn:disabled { opacity: 1; }
     get state() { return state; },
     start: startItem, stop: stopItem, pause: pauseSession, resume: resumeSession,
     end: endSession, reset: clearRun, resetItem: resetItem,
-    fmt: fmt, itemMs: itemMs, sessionMs: sessionMs, normData: normData,
+    fmt: fmt, itemMs: itemMs, sessionMs: sessionMs, normData: normData, recordStats: recordStats,
     applyImport: applyImport, render: render, save: save
   };
 })();
