@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="스톱워치">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#F1F5FA">
+<meta name="color-scheme" content="light">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>세션 스톱워치</title>
+<style>
+:root {
+  --bg: #F1F5FA; --card: #FFFFFF; --fg: #24323A; --sub: #556570; --line: #D8E1EA;
+  --mint: #BDE7DC; --mint-line: #86CBBF; --mint-fg: #173A36;
+  --run: #D8F2EA; --run-line: #79C9B5;
+  --peach: #FFE7D1; --peach-line: #F0B886; --peach-fg: #5A3A17;
+  --rose: #F9D6DC; --rose-line: #E9A3B0; --rose-fg: #6A2433;
+  --sky: #DCEBFA; --sky-line: #9EC6EC; --sky-fg: #1E3A57;
+  --done: #E9ECF1; --done-line: #CDD3DB;
+  --danger: #A63A52;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%; -webkit-user-select: none; user-select: none; }
+#app { max-width: 640px; margin: 0 auto;
+  padding: calc(12px + env(safe-area-inset-top)) 14px calc(120px + env(safe-area-inset-bottom)); }
+h1 { font-size: 20px; margin: 0; }
+.bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.bar h1 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; min-height: 44px; padding: 0 14px; touch-action: manipulation;
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+button:active:not(:disabled) { filter: brightness(0.94); }
+button:disabled { opacity: 0.4; }
+button.small { min-height: 36px; padding: 0 11px; font-size: 14px; }
+button.mint { background: var(--mint); border-color: var(--mint-line); color: var(--mint-fg); font-weight: 600; }
+button.sky { background: var(--sky); border-color: var(--sky-line); color: var(--sky-fg); }
+button.peach { background: var(--peach); border-color: var(--peach-line); color: var(--peach-fg); font-weight: 600; }
+button.rose { background: var(--rose); border-color: var(--rose-line); color: var(--rose-fg); font-weight: 600; }
+button.danger { color: var(--danger); }
+button.big { flex: 1; min-height: 50px; font-size: 17px; }
+button.tall { min-height: 54px; font-size: 17px; }
+button.block { display: block; width: 100%; }
+button.title-btn { background: none; border: 0; border-radius: 0; padding: 0; min-height: 0; text-align: left; }
+button.title-btn:disabled { opacity: 1; }
+.grow { flex: 1; min-width: 0; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row.wrap { flex-wrap: wrap; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px; margin-bottom: 10px; }
+.card.running { background: var(--run); border-color: var(--run-line); }
+.card.paused { background: var(--peach); border-color: var(--peach-line); }
+.card.done { background: var(--done); border-color: var(--done-line); }
+.card.done .name, .card.done .time { color: var(--sub); }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub { color: var(--sub); font-size: 14px; }
+.badge { display: inline-block; margin-top: 3px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--bg); border: 1px solid var(--line); color: var(--sub); }
+.card.running .badge { background: var(--mint); border-color: var(--mint-line); color: var(--mint-fg); }
+.card.paused .badge { background: var(--card); border-color: var(--peach-line); color: var(--peach-fg); }
+.time { font-variant-numeric: tabular-nums; font-size: 26px; font-weight: 600; white-space: nowrap; }
+.total { font-variant-numeric: tabular-nums; font-size: 38px; font-weight: 700; margin: 2px 0 12px; }
+.controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.controls .span3 { grid-column: 1 / -1; }
+.actions { margin-top: 10px; }
+.add { margin-bottom: 12px; }
+.empty { color: var(--sub); text-align: center; padding: 28px 0; }
+.foot { margin-top: 16px; }
+.rec-list { margin-top: 8px; }
+.rec-row { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-top: 1px dashed var(--line); font-size: 15px; }
+.rec-row .t { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lockbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  padding: 8px 14px calc(10px + env(safe-area-inset-bottom));
+  background: rgba(241, 245, 250, 0.96); border-top: 1px solid var(--line); }
+.lock-note { text-align: center; margin-bottom: 6px; }
+.unlock { position: relative; overflow: hidden; display: block; width: 100%; max-width: 612px; margin: 0 auto;
+  min-height: 56px; background: var(--sky); border-color: var(--sky-line); color: var(--sky-fg); font-weight: 600; touch-action: none; }
+.unlock .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--mint); }
+.unlock.holding .fill { width: 100%; transition: width 1s linear; }
+.unlock.armed { border-color: var(--mint-line); color: var(--mint-fg); }
+.unlock .label { position: relative; }
+.modal-back { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 10; display: flex; align-items: flex-end; justify-content: center;
+  padding: 14px 14px calc(14px + env(safe-area-inset-bottom)); background: rgba(36, 50, 58, 0.35); }
+.modal { width: 100%; max-width: 520px; background: var(--card); border-radius: 18px; padding: 16px; }
+.modal h2 { font-size: 18px; margin: 0 0 6px; }
+.modal p { margin: 0 0 12px; color: var(--sub); }
+.modal input { display: block; width: 100%; margin: 0 0 12px; padding: 10px 12px; font: inherit; font-size: 16px; color: var(--fg);
+  border: 1px solid var(--line); border-radius: 10px; -webkit-user-select: text; user-select: text; }
+.modal-actions button { flex: 1; }
+.toast { position: fixed; z-index: 20; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%);
+  padding: 8px 14px; border-radius: 999px; background: var(--fg); color: #FFFFFF; font-size: 14px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  'use strict';
+
+  var APP_VERSION = '2.0.0';
+  var KEY = 'session-stopwatch-v2';
+  var OLD_KEY = 'session-stopwatch-v1';
+  var HOLD_MS = 1000;
+  var STATE_TEXT = { idle: '대기', running: '실행 중', paused: '일시 정지', done: '완료' };
+
+  var state = null;
+  var migrated = false;
+  var live = [];
+  var holdTimer = null;
+  var guardUntil = 0;
+
+  /* ---------- 공통 ---------- */
+  function isNum(v) { return typeof v === 'number' && isFinite(v); }
+  function isStr(v) { return typeof v === 'string'; }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function pad(n, w) { var s = String(n); while (s.length < w) s = '0' + s; return s; }
+  function fmt(ms) {
+    var t = Math.floor(Math.max(0, ms) / 100);
+    var tenth = t % 10; t = Math.floor(t / 10);
+    var sec = t % 60; t = Math.floor(t / 60);
+    var min = t % 60; var hr = Math.floor(t / 60);
+    return pad(hr, 2) + ':' + pad(min, 2) + ':' + pad(sec, 2) + '.' + tenth;
+  }
+  function fmtDate(ts) {
+    var d = new Date(ts);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1, 2) + '-' + pad(d.getDate(), 2) + ' ' +
+      pad(d.getHours(), 2) + ':' + pad(d.getMinutes(), 2);
+  }
+
+  /* ---------- 저장 데이터 정규화 (v1 변환 포함) ---------- */
+  function normItem(it) {
+    if (!it || !isStr(it.id) || !isStr(it.label) || !isNum(it.elapsed) || it.elapsed < 0) return null;
+    var rs = it.runningSince === undefined ? null : it.runningSince;
+    if (rs !== null && !isNum(rs)) return null;
+    var st = it.state;
+    if (!Object.prototype.hasOwnProperty.call(STATE_TEXT, st)) {
+      /* v1에는 완료 개념이 없으므로, 실행 중이 아닌 기록은 이어서 잴 수 있는 일시 정지로 변환 */
+      st = rs !== null ? 'running' : (it.elapsed > 0 ? 'paused' : 'idle');
+    }
+    if (st === 'running' && rs === null) st = it.elapsed > 0 ? 'paused' : 'idle';
+    if (st === 'idle' && it.elapsed > 0) st = 'paused';
+    if (st !== 'running') rs = null;
+    return { id: it.id, label: it.label, state: st, elapsed: it.elapsed, runningSince: rs };
+  }
+  function normRecord(r) {
+    if (!r || !isStr(r.id) || !isNum(r.endedAt) || !Array.isArray(r.items)) return null;
+    var items = [];
+    for (var i = 0; i < r.items.length; i++) {
+      var x = r.items[i];
+      if (!x || !isStr(x.label) || !isNum(x.ms) || x.ms < 0) return null;
+      items.push({ label: x.label, ms: x.ms });
+    }
+    var total = items.reduce(function (a, x) { return a + x.ms; }, 0);
+    return { id: r.id, startedAt: isNum(r.startedAt) ? r.startedAt : null, endedAt: r.endedAt, total: total, items: items };
+  }
+  function normSession(s, now) {
+    if (!s || !isStr(s.id) || !isStr(s.name) || !Array.isArray(s.items)) return null;
+    var items = [], running = false, i;
+    for (i = 0; i < s.items.length; i++) {
+      var it = normItem(s.items[i]);
+      if (!it) return null;
+      if (it.state === 'running') {
+        if (running) { it.elapsed += Math.max(0, now - it.runningSince); it.runningSince = null; it.state = 'paused'; }
+        running = true;
+      }
+      items.push(it);
+    }
+    var records = [];
+    if (s.records !== undefined) {
+      if (!Array.isArray(s.records)) return null;
+      for (i = 0; i < s.records.length; i++) {
+        var r = normRecord(s.records[i]);
+        if (!r) return null;
+        records.push(r);
+      }
+    }
+    var pausedId = isStr(s.pausedId) ? s.pausedId : null;
+    if (running || !items.some(function (x) { return x.id === pausedId && x.state === 'paused'; })) pausedId = null;
+    var progress = items.some(function (x) { return x.state !== 'idle' || x.elapsed > 0; });
+    return {
+      id: s.id, name: s.name, items: items, pausedId: pausedId,
+      runStartedAt: progress && isNum(s.runStartedAt) ? s.runStartedAt : null,
+      records: records
+    };
+  }
+  function normData(d) {
+    if (!d || !Array.isArray(d.sessions)) return null;
+    var now = Date.now(), out = [];
+    for (var i = 0; i < d.sessions.length; i++) {
+      var s = normSession(d.sessions[i], now);
+      if (!s) return null;
+      out.push(s);
+    }
+    return out;
+  }
+
+  /* ---------- 저장/복원 ---------- */
+  function load() {
+    var ui = { sid: null, view: 'list', edit: false, locked: false };
+    var raw = null, fromOld = false;
+    try {
+      raw = localStorage.getItem(KEY);
+      if (raw === null) { raw = localStorage.getItem(OLD_KEY); fromOld = raw !== null; }
+    } catch (e) { raw = null; }
+    if (raw) {
+      var d = null, sessions = null;
+      try { d = JSON.parse(raw); sessions = normData(d); } catch (e) { sessions = null; }
+      if (sessions) {
+        var u = (d && d.ui) || {};
+        if (isStr(u.sid)) { ui.sid = u.sid; ui.view = u.view === 'records' ? 'records' : 'session'; }
+        if (!fromOld) ui.locked = u.locked === true;
+        migrated = fromOld;
+        return { sessions: sessions, ui: ui };
+      }
+      /* 읽을 수 없는 v2 데이터는 덮어쓰기 전에 보관 */
+      if (!fromOld) { try { localStorage.setItem(KEY + '-broken', raw); } catch (e) {} }
+    }
+    return { sessions: [], ui: ui };
+  }
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({
+        v: 2,
+        sessions: state.sessions,
+        ui: { sid: state.ui.view === 'list' ? null : state.ui.sid, view: state.ui.view, locked: state.ui.locked }
+      }));
+    } catch (e) {}
+  }
+
+  /* ---------- 모델 ---------- */
+  function mkItem(label) { return { id: uid(), label: label, state: 'idle', elapsed: 0, runningSince: null }; }
+  function mkSession(name) {
+    return { id: uid(), name: name, items: [mkItem('준비'), mkItem('정리')], pausedId: null, runStartedAt: null, records: [] };
+  }
+  function findSession(id) {
+    for (var i = 0; i < state.sessions.length; i++) if (state.sessions[i].id === id) return state.sessions[i];
+    return null;
+  }
+  function itemMs(it, now) {
+    return it.elapsed + (it.state === 'running' && it.runningSince !== null ? Math.max(0, now - it.runningSince) : 0);
+  }
+  function sessionMs(s, now) { return s.items.reduce(function (a, it) { return a + itemMs(it, now); }, 0); }
+  function runningItem(s) {
+    for (var i = 0; i < s.items.length; i++) if (s.items[i].state === 'running') return s.items[i];
+    return null;
+  }
+  function pausedItem(s) {
+    if (!s.pausedId) return null;
+    for (var i = 0; i < s.items.length; i++) {
+      if (s.items[i].id === s.pausedId && s.items[i].state === 'paused') return s.items[i];
+    }
+    return null;
+  }
+  function hasProgress(s) { return s.items.some(function (it) { return it.state !== 'idle' || it.elapsed > 0; }); }
+  function halt(it, now, to) {
+    if (it.state === 'running' && it.runningSince !== null) it.elapsed += Math.max(0, now - it.runningSince);
+    it.runningSince = null;
+    it.state = to;
+  }
+  /* 시작: 대기·일시 정지 라벨을 실행. 실행 중이던 다른 라벨은 일시 정지 */
+  function startItem(s, it) {
+    if (it.state !== 'idle' && it.state !== 'paused') return false;
+    var now = Date.now();
+    s.items.forEach(function (o) { if (o !== it && o.state === 'running') halt(o, now, 'paused'); });
+    it.state = 'running';
+    it.runningSince = now;
+    s.pausedId = null;
+    if (s.runStartedAt === null) s.runStartedAt = now;
+    return true;
+  }
+  /* 정지: 완료로 고정. 세션 리셋·종료 전까지 다시 시작할 수 없음 */
+  function stopItem(s, it) {
+    if (it.state !== 'running' && it.state !== 'paused') return false;
+    halt(it, Date.now(), 'done');
+    if (s.pausedId === it.id) s.pausedId = null;
+    return true;
+  }
+  /* 전체 일시 정지 / 재개 */
+  function pauseSession(s) {
+    var r = runningItem(s);
+    if (!r) return false;
+    halt(r, Date.now(), 'paused');
+    s.pausedId = r.id;
+    return true;
+  }
+  function resumeSession(s) {
+    var p = pausedItem(s);
+    if (!p || runningItem(s)) return false;
+    p.state = 'running';
+    p.runningSince = Date.now();
+    s.pausedId = null;
+    return true;
+  }
+  function clearRun(s) {
+    s.items.forEach(function (it) { it.state = 'idle'; it.elapsed = 0; it.runningSince = null; });
+    s.pausedId = null;
+    s.runStartedAt = null;
+  }
+  /* 세션 종료: 결과를 기록에 저장하고 모든 라벨을 대기로 */
+  function endSession(s) {
+    if (!hasProgress(s)) return null;
+    var now = Date.now();
+    var items = s.items.map(function (it) { return { label: it.label, ms: itemMs(it, now) }; });
+    var rec = {
+      id: uid(), startedAt: s.runStartedAt, endedAt: now,
+      total: items.reduce(function (a, x) { return a + x.ms; }, 0), items: items
+    };
+    s.records.unshift(rec);
+    clearRun(s);
+    return rec;
+  }
+  /* 편집 모드의 라벨 초기화: 완료된 라벨도 대기로 되돌림 */
+  function resetItem(s, it) {
+    it.state = 'idle'; it.elapsed = 0; it.runningSince = null;
+    if (s.pausedId === it.id) s.pausedId = null;
+    if (!hasProgress(s)) s.runStartedAt = null;
+    return true;
+  }
+  function moveItem(s, idx, d) {
+    var j = idx + d;
+    if (j < 0 || j >= s.items.length) return false;
+    var t = s.items[idx]; s.items[idx] = s.items[j]; s.items[j] = t;
+    return true;
+  }
+
+  /* ---------- 화면 공통 ---------- */
+  function h(tag, attrs, kids) {
+    var e = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (k === 'class') e.className = v;
+      else if (k === 'text') e.textContent = v;
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else e.setAttribute(k, v);
+    });
+    (kids || []).forEach(function (c) {
+      if (c === null || c === undefined) return;
+      e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    });
+    return e;
+  }
+  /* 잠금 중이거나 잠금 해제 직후에는 동작하지 않는 버튼 */
+  function btn(label, cls, fn, opts) {
+    opts = opts || {};
+    var b = h('button', { type: 'button', 'class': cls || '' }, Array.isArray(label) ? label : [label]);
+    b.disabled = !!opts.disabled || !!state.ui.locked;
+    b.addEventListener('click', function (e) {
+      if (state.ui.locked || b.disabled || !fn || Date.now() < guardUntil) return;
+      fn(e);
+    });
+    return b;
+  }
+  function liveTime(cls, fn) {
+    var el = h('div', { 'class': cls });
+    live.push({ el: el, fn: fn });
+    return el;
+  }
+  function tick() {
+    var now = Date.now();
+    live.forEach(function (l) {
+      var t = fmt(l.fn(now));
+      if (l.el.textContent !== t) l.el.textContent = t;
+    });
+  }
+  function act(fn) { if (fn()) { save(); render(); } }
+
+  /* 확인 창 (브라우저 기본 대화상자 대신 사용) */
+  function ask(o) {
+    return new Promise(function (resolve) {
+      var input = null, closed = false;
+      var back = h('div', { 'class': 'modal-back' });
+      function close(v) {
+        if (closed) return;
+        closed = true;
+        if (back.parentNode) back.parentNode.removeChild(back);
+        resolve(v);
+      }
+      function ok() {
+        if (!input) { close(true); return; }
+        var v = input.value.trim();
+        if (!v) { input.focus(); return; }
+        close(v);
+      }
+      var kids = [h('h2', { text: o.title })];
+      if (o.message) kids.push(h('p', { text: o.message }));
+      if (o.input !== undefined) {
+        input = h('input', { type: 'text', maxlength: '40', autocomplete: 'off', enterkeyhint: 'done' });
+        input.value = o.input;
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ok(); } });
+        kids.push(input);
+      }
+      var row = [];
+      if (!o.alert) row.push(h('button', { type: 'button', text: '취소', onclick: function () { close(null); } }));
+      row.push(h('button', { type: 'button', 'class': o.danger ? 'rose' : 'mint', text: o.ok || '확인', onclick: ok }));
+      kids.push(h('div', { 'class': 'row modal-actions' }, row));
+      back.appendChild(h('div', { 'class': 'modal', role: 'dialog', 'aria-modal': 'true' }, kids));
+      back.addEventListener('click', function (e) { if (e.target === back) close(o.alert ? true : null); });
+      document.body.appendChild(back);
+      if (input) { try { input.focus(); input.select(); } catch (e) {} }
+    });
+  }
+  function toast(msg) {
+    var t = h('div', { 'class': 'toast', role: 'status', text: msg });
+    document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 2000);
+  }
+
+  /* ---------- 화면 ---------- */
+  function render() {
+    var root = document.getElementById('app');
+    live = [];
+    cancelHold();
+    while (root.firstChild) root.removeChild(root.firstChild);
+    var s = state.ui.sid ? findSession(state.ui.sid) : null;
+    if (!s) { state.ui.sid = null; state.ui.view = 'list'; state.ui.edit = false; }
+    document.body.className = state.ui.locked ? 'locked' : '';
+    if (!s) renderList(root);
+    else if (state.ui.view === 'records') renderRecords(root, s);
+    else renderSession(root, s);
+    if (state.ui.locked) root.appendChild(renderLockbar());
+    tick();
+  }
+  function go(view, sid) {
+    state.ui.view = view;
+    state.ui.sid = sid || null;
+    state.ui.edit = false;
+    save(); render();
+  }
+  function lockApp() { state.ui.locked = true; save(); render(); }
+
+  function statusText(s) {
+    var run = runningItem(s), p = pausedItem(s);
+    if (run) return '실행 중: ' + run.label;
+    if (p) return '일시 정지: ' + p.label;
+    return hasProgress(s) ? '실행 중인 라벨 없음' : '대기';
+  }
+
+  function renderList(root) {
+    root.appendChild(h('div', { 'class': 'bar' }, [
+      h('h1', { text: '세션 스톱워치' }),
+      btn('잠금', 'sky small', lockApp)
+    ]));
+    root.appendChild(h('div', { 'class': 'add' }, [btn('세션 추가', 'mint tall block', addSession)]));
+    if (!state.sessions.length) {
+      root.appendChild(h('div', { 'class': 'empty', text: '세션이 없습니다. "세션 추가"를 누르십시오.' }));
+    }
+    state.sessions.forEach(function (s) {
+      var run = runningItem(s), p = pausedItem(s);
+      root.appendChild(h('div', { 'class': 'card' + (run ? ' running' : (p ? ' paused' : '')) }, [
+        h('div', { 'class': 'row' }, [
+          btn([
+            h('div', { 'class': 'name', text: s.name }),
+            h('div', { 'class': 'sub', text: statusText(s) + ' · 기록 ' + s.records.length + '건' })
+          ], 'title-btn grow', function () { go('session', s.id); }),
+          liveTime('time', function (now) { return sessionMs(s, now); })
+        ]),
+        h('div', { 'class': 'row actions' }, [
+          btn('열기', 'mint small', function () { go('session', s.id); }),
+          btn('이름 변경', 'small', function () { renameSession(s); }),
+          btn('삭제', 'small danger', function () { deleteSession(s); })
+        ])
+      ]));
+    });
+    root.appendChild(h('div', { 'class': 'row wrap foot' }, [
+      btn('백업 내보내기', 'small', exportData),
+      btn('백업 가져오기', 'small', importData)
+    ]));
+    root.appendChild(h('div', { 'class': 'sub foot',
+      text: '데이터는 이 기기의 브라우저 저장소에만 보관됩니다. 정기적으로 백업하십시오. v' + APP_VERSION }));
+  }
+
+  function renderSession(root, s) {
+    var edit = state.ui.edit;
+    var run = runningItem(s), p = pausedItem(s), progress = hasProgress(s);
+    root.appendChild(h('div', { 'class': 'bar' }, [
+      btn('목록', 'small', function () { go('list'); }),
+      h('h1', { text: s.name }),
+      btn('기록 ' + s.records.length, 'sky small', function () { go('records', s.id); }),
+      btn('잠금', 'sky small', lockApp)
+    ]));
+    root.appendChild(h('div', { 'class': 'sub', text: statusText(s) }));
+    root.appendChild(liveTime('total', function (now) { return sessionMs(s, now); }));
+
+    var pauseBtn;
+    if (run) pauseBtn = btn('전체 일시 정지', 'peach tall span3', function () { act(function () { return pauseSession(s); }); });
+    else if (p) pauseBtn = btn('재개', 'mint tall span3', function () { act(function () { return resumeSession(s); }); });
+    else pauseBtn = btn('전체 일시 정지', 'peach tall span3', null, { disabled: true });
+    root.appendChild(h('div', { 'class': 'controls' }, [
+      pauseBtn,
+      btn('세션 종료', 'sky', function () { confirmEnd(s); }, { disabled: !progress }),
+      btn('세션 리셋', 'danger', function () { confirmReset(s); }, { disabled: !progress }),
+      btn(edit ? '편집 완료' : '편집', edit ? 'mint' : '', function () { state.ui.edit = !state.ui.edit; render(); })
+    ]));
+
+    if (!s.items.length) {
+      root.appendChild(h('div', { 'class': 'empty', text: '라벨이 없습니다. "편집"에서 라벨을 추가하십시오.' }));
+    }
+    s.items.forEach(function (it, idx) {
+      var head = h('div', { 'class': 'row' }, [
+        h('div', { 'class': 'grow' }, [
+          h('div', { 'class': 'name', text: it.label }),
+          h('span', { 'class': 'badge', text: STATE_TEXT[it.state] })
+        ]),
+        liveTime('time', function (now) { return itemMs(it, now); })
+      ]);
+      var actions;
+      if (!edit) {
+        /* 일반 화면: 라벨마다 시작·정지만 */
+        actions = h('div', { 'class': 'row actions' }, [
+          btn('시작', 'mint big', function () { act(function () { return startItem(s, it); }); },
+            { disabled: it.state !== 'idle' && it.state !== 'paused' }),
+          btn('정지', 'rose big', function () { act(function () { return stopItem(s, it); }); },
+            { disabled: it.state !== 'running' && it.state !== 'paused' })
+        ]);
+      } else {
+        actions = h('div', { 'class': 'row wrap actions' }, [
+          btn('이름', 'small', function () { renameItem(it); }),
+          btn('위', 'small', function () { act(function () { return moveItem(s, idx, -1); }); }, { disabled: idx === 0 }),
+          btn('아래', 'small', function () { act(function () { return moveItem(s, idx, 1); }); }, { disabled: idx === s.items.length - 1 }),
+          btn('초기화', 'small', function () { confirmResetItem(s, it); }, { disabled: it.state === 'idle' && it.elapsed === 0 }),
+          btn('삭제', 'small danger', function () { deleteItem(s, it); }, { disabled: it.state === 'running' || it.state === 'paused' })
+        ]);
+      }
+      root.appendChild(h('div', { 'class': 'card ' + it.state }, [head, actions]));
+    });
+    if (edit) root.appendChild(h('div', { 'class': 'foot' }, [btn('라벨 추가', 'mint tall block', function () { addItem(s); })]));
+  }
+
+  function renderRecords(root, s) {
+    root.appendChild(h('div', { 'class': 'bar' }, [
+      btn('세션', 'small', function () { go('session', s.id); }),
+      h('h1', { text: s.name + ' 기록' }),
+      btn('잠금', 'sky small', lockApp)
+    ]));
+    if (!s.records.length) {
+      root.appendChild(h('div', { 'class': 'empty', text: '저장된 기록이 없습니다. 세션 화면에서 "세션 종료"를 누르면 저장됩니다.' }));
+    }
+    s.records.forEach(function (r) {
+      root.appendChild(h('div', { 'class': 'card' }, [
+        h('div', { 'class': 'row' }, [
+          h('div', { 'class': 'grow' }, [
+            h('div', { 'class': 'name', text: fmtDate(r.endedAt) + ' 종료' }),
+            h('div', { 'class': 'sub', text: r.startedAt !== null ? '시작 ' + fmtDate(r.startedAt) : '시작 시각 정보 없음' })
+          ]),
+          h('div', { 'class': 'time', text: fmt(r.total) })
+        ]),
+        h('div', { 'class': 'rec-list' }, r.items.map(function (x) {
+          return h('div', { 'class': 'rec-row' }, [h('span', { text: x.label }), h('span', { 'class': 't', text: fmt(x.ms) })]);
+        })),
+        h('div', { 'class': 'row actions' }, [btn('삭제', 'small danger', function () { deleteRecord(s, r); })])
+      ]));
+    });
+  }
+
+  /* 잠금 해제: 1초 이상 누른 뒤 손을 떼면 해제. 해제 직후 0.7초간 버튼 입력 무시 */
+  function cancelHold() { if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; } }
+  function renderLockbar() {
+    var IDLE_TEXT = '1초 이상 누른 뒤 떼면 잠금 해제';
+    var label = h('span', { 'class': 'label', text: IDLE_TEXT });
+    var b = h('button', { type: 'button', 'class': 'unlock' }, [h('span', { 'class': 'fill' }), label]);
+    var armed = false;
+    function disarm() {
+      cancelHold();
+      armed = false;
+      b.classList.remove('holding');
+      b.classList.remove('armed');
+      label.textContent = IDLE_TEXT;
+    }
+    b.addEventListener('pointerdown', function (e) {
+      if (e.preventDefault) e.preventDefault();
+      disarm();
+      b.classList.add('holding');
+      holdTimer = setTimeout(function () {
+        holdTimer = null;
+        armed = true;
+        b.classList.add('armed');
+        label.textContent = '손을 떼면 잠금이 해제됩니다';
+      }, HOLD_MS);
+    });
+    b.addEventListener('pointerup', function () {
+      var unlock = armed;
+      disarm();
+      if (!unlock) return;
+      guardUntil = Date.now() + 700;
+      state.ui.locked = false;
+      save(); render();
+    });
+    b.addEventListener('pointercancel', disarm);
+    b.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') disarm(); });
+    b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    return h('div', { 'class': 'lockbar' }, [
+      h('div', { 'class': 'sub lock-note', text: '잠금 중에는 모든 버튼이 동작하지 않습니다.' }),
+      b
+    ]);
+  }
+
+  /* ---------- 동작 ---------- */
+  function addSession() {
+    ask({ title: '세션 추가', message: '세션 이름을 입력하십시오.', input: '세션 ' + (state.sessions.length + 1), ok: '추가' })
+      .then(function (name) {
+        if (!name) return;
+        var s = mkSession(name);
+        state.sessions.push(s);
+        go('session', s.id);
+      });
+  }
+  function renameSession(s) {
+    ask({ title: '세션 이름 변경', input: s.name, ok: '변경' }).then(function (n) {
+      if (!n) return;
+      s.name = n; save(); render();
+    });
+  }
+  function deleteSession(s) {
+    ask({ title: '세션 삭제', message: '"' + s.name + '" 세션과 기록 ' + s.records.length + '건을 삭제합니다.', ok: '삭제', danger: true })
+      .then(function (yes) {
+        if (!yes) return;
+        state.sessions = state.sessions.filter(function (x) { return x.id !== s.id; });
+        save(); render();
+      });
+  }
+  function confirmEnd(s) {
+    ask({ title: '세션 종료', message: '현재 결과를 기록에 저장하고 모든 라벨을 대기 상태로 되돌립니다.', ok: '종료' })
+      .then(function (yes) {
+        if (!yes) return;
+        if (endSession(s)) { save(); render(); toast('기록에 저장했습니다.'); }
+      });
+  }
+  function confirmReset(s) {
+    ask({ title: '세션 리셋', message: '기록에 저장하지 않고 모든 라벨의 시간을 지웁니다.', ok: '리셋', danger: true })
+      .then(function (yes) {
+        if (!yes) return;
+        clearRun(s); save(); render();
+      });
+  }
+  function addItem(s) {
+    ask({ title: '라벨 추가', input: '라벨' + Math.max(1, s.items.length - 1), ok: '추가' }).then(function (n) {
+      if (!n) return;
+      var it = mkItem(n);
+      var last = s.items[s.items.length - 1];
+      if (last && last.label === '정리') s.items.splice(s.items.length - 1, 0, it);
+      else s.items.push(it);
+      save(); render();
+    });
+  }
+  function renameItem(it) {
+    ask({ title: '라벨 이름 변경', input: it.label, ok: '변경' }).then(function (n) {
+      if (!n) return;
+      it.label = n; save(); render();
+    });
+  }
+  function confirmResetItem(s, it) {
+    ask({ title: '라벨 초기화', message: '"' + it.label + '"의 시간을 지우고 대기 상태로 되돌립니다. 완료된 라벨도 다시 시작할 수 있게 됩니다.', ok: '초기화', danger: true })
+      .then(function (yes) {
+        if (!yes) return;
+        resetItem(s, it); save(); render();
+      });
+  }
+  function deleteItem(s, it) {
+    if (it.state === 'running' || it.state === 'paused') return;
+    ask({ title: '라벨 삭제', message: '"' + it.label + '" 라벨을 삭제합니다.', ok: '삭제', danger: true }).then(function (yes) {
+      if (!yes) return;
+      s.items = s.items.filter(function (x) { return x.id !== it.id; });
+      if (!hasProgress(s)) s.runStartedAt = null;
+      save(); render();
+    });
+  }
+  function deleteRecord(s, r) {
+    ask({ title: '기록 삭제', message: fmtDate(r.endedAt) + ' 종료 기록을 삭제합니다.', ok: '삭제', danger: true }).then(function (yes) {
+      if (!yes) return;
+      s.records = s.records.filter(function (x) { return x.id !== r.id; });
+      save(); render();
+    });
+  }
+
+  /* ---------- 백업 ---------- */
+  function exportData() {
+    var d = new Date();
+    var name = 'stopwatch-backup-' + d.getFullYear() + pad(d.getMonth() + 1, 2) + pad(d.getDate(), 2) + '.json';
+    var json = JSON.stringify({ app: 'session-stopwatch', v: 2, exportedAt: Date.now(), sessions: state.sessions }, null, 2);
+    var file = null;
+    try { file = new File([json], name, { type: 'application/json' }); } catch (e) {}
+    if (file && navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+      navigator.share({ files: [file], title: name }).catch(function () {});
+      return;
+    }
+    var url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    var a = h('a', { href: url, download: name });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  function importData() {
+    var input = h('input', { type: 'file', accept: 'application/json,.json' });
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0];
+      if (!f) return;
+      var r = new FileReader();
+      r.onload = function () { applyImport(String(r.result)); };
+      r.readAsText(f);
+    });
+    input.click();
+  }
+  /* v1·v2 백업 파일 모두 허용 */
+  function applyImport(text) {
+    var sessions = null;
+    try { sessions = normData(JSON.parse(text)); } catch (e) { sessions = null; }
+    if (!sessions) {
+      return ask({ title: '가져오기 실패', message: '올바른 백업 파일이 아닙니다.', alert: true }).then(function () { return false; });
+    }
+    return ask({ title: '백업 가져오기', message: '현재 데이터를 백업 파일의 세션 ' + sessions.length + '개로 교체합니다.', ok: '교체', danger: true })
+      .then(function (yes) {
+        if (!yes) return false;
+        state.sessions = sessions;
+        go('list');
+        return true;
+      });
+  }
+
+  /* ---------- 시작 ---------- */
+  state = load();
+  if (migrated) save();
+  render();
+  setInterval(tick, 100);
+  /* 화면이 꺼진 동안에는 코드가 멈추므로, 복귀 시 저장된 시작 시각으로 즉시 다시 계산 */
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
+  window.addEventListener('pageshow', function () { tick(); });
+  window.addEventListener('focus', function () { tick(); });
+  document.addEventListener('touchstart', function () {}, { passive: true });
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  }
+
+  window.StopwatchDebug = {
+    version: APP_VERSION,
+    get state() { return state; },
+    start: startItem, stop: stopItem, pause: pauseSession, resume: resumeSession,
+    end: endSession, reset: clearRun, resetItem: resetItem,
+    fmt: fmt, itemMs: itemMs, sessionMs: sessionMs, normData: normData,
+    applyImport: applyImport, render: render, save: save
+  };
+})();
+</script>
+</body>
+</html>
