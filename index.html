@@ -29,7 +29,7 @@ html, body { margin: 0; background: var(--bg); color: var(--fg);
   font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
   -webkit-text-size-adjust: 100%; -webkit-user-select: none; user-select: none; }
 #app { max-width: 640px; margin: 0 auto;
-  padding: calc(12px + env(safe-area-inset-top)) 14px calc(120px + env(safe-area-inset-bottom)); }
+  padding: calc(env(safe-area-inset-top) + 22px) 14px calc(120px + env(safe-area-inset-bottom)); }
 h1 { font-size: 20px; margin: 0; }
 .bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .bar h1 { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -273,9 +273,9 @@ button.title-btn:disabled { opacity: 1; }
     if (s.runStartedAt === null) s.runStartedAt = now;
     return true;
   }
-  /* 정지: 완료로 고정. 세션 리셋·종료 전까지 다시 시작할 수 없음 */
+  /* 정지: 완료로 고정. 세션 리셋·종료 전까지 다시 시작할 수 없음. 대기 라벨은 0ms로 완료되며 실행 중인 라벨에는 영향 없음 */
   function stopItem(s, it) {
-    if (it.state !== 'running' && it.state !== 'paused') return false;
+    if (it.state !== 'idle' && it.state !== 'running' && it.state !== 'paused') return false;
     halt(it, Date.now(), 'done');
     if (s.pausedId === it.id) s.pausedId = null;
     return true;
@@ -516,7 +516,7 @@ button.title-btn:disabled { opacity: 1; }
           btn('시작', 'mint big', function () { act(function () { return startItem(s, it); }); },
             { disabled: it.state !== 'idle' && it.state !== 'paused' }),
           btn('정지', 'rose big', function () { act(function () { return stopItem(s, it); }); },
-            { disabled: it.state !== 'running' && it.state !== 'paused' })
+            { disabled: it.state === 'done' })
         ]);
       } else {
         actions = h('div', { 'class': 'row wrap actions' }, [
