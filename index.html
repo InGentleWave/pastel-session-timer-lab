@@ -114,7 +114,7 @@ button.title-btn:disabled { opacity: 1; }
 (function () {
   'use strict';
 
-  var APP_VERSION = '2.2.0';
+  var APP_VERSION = '2.3.0';
   var KEY = 'session-stopwatch-v2';
   var OLD_KEY = 'session-stopwatch-v1';
   var HOLD_MS = 1000;
@@ -131,12 +131,15 @@ button.title-btn:disabled { opacity: 1; }
   function isStr(v) { return typeof v === 'string'; }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
   function pad(n, w) { var s = String(n); while (s.length < w) s = '0' + s; return s; }
+  /* 소수점 표시가 꺼져 있으면 0.1초 단위를 버리고 초 단위로 표시(내림) */
   function fmt(ms) {
-    var t = Math.floor(Math.max(0, ms) / 100);
-    var tenth = t % 10; t = Math.floor(t / 10);
+    var dec = state.ui.decimal !== false;
+    var t = Math.floor(Math.max(0, ms) / (dec ? 100 : 1000));
+    var tenth = null;
+    if (dec) { tenth = t % 10; t = Math.floor(t / 10); }
     var sec = t % 60; t = Math.floor(t / 60);
     var min = t % 60; var hr = Math.floor(t / 60);
-    return pad(hr, 2) + ':' + pad(min, 2) + ':' + pad(sec, 2) + '.' + tenth;
+    return pad(hr, 2) + ':' + pad(min, 2) + ':' + pad(sec, 2) + (dec ? '.' + tenth : '');
   }
   function fmtDate(ts) {
     var d = new Date(ts);
@@ -213,7 +216,7 @@ button.title-btn:disabled { opacity: 1; }
 
   /* ---------- 저장/복원 ---------- */
   function load() {
-    var ui = { sid: null, view: 'list', edit: false, locked: false };
+    var ui = { sid: null, view: 'list', edit: false, locked: false, decimal: true };
     var raw = null, fromOld = false;
     try {
       raw = localStorage.getItem(KEY);
@@ -226,6 +229,7 @@ button.title-btn:disabled { opacity: 1; }
         var u = (d && d.ui) || {};
         if (isStr(u.sid)) { ui.sid = u.sid; ui.view = u.view === 'records' ? 'records' : 'session'; }
         if (!fromOld) ui.locked = u.locked === true;
+        if (u.decimal === false) ui.decimal = false;
         migrated = fromOld;
         return { sessions: sessions, ui: ui };
       }
@@ -239,7 +243,7 @@ button.title-btn:disabled { opacity: 1; }
       localStorage.setItem(KEY, JSON.stringify({
         v: 2,
         sessions: state.sessions,
-        ui: { sid: state.ui.view === 'list' ? null : state.ui.sid, view: state.ui.view, locked: state.ui.locked }
+        ui: { sid: state.ui.view === 'list' ? null : state.ui.sid, view: state.ui.view, locked: state.ui.locked, decimal: state.ui.decimal !== false }
       }));
     } catch (e) {}
   }
@@ -536,6 +540,9 @@ button.title-btn:disabled { opacity: 1; }
       ]));
     });
     root.appendChild(h('div', { 'class': 'row wrap foot' }, [
+      btn('소수점 표시: ' + (state.ui.decimal !== false ? '켜짐' : '꺼짐'), 'small', function () {
+        state.ui.decimal = state.ui.decimal === false; save(); render();
+      }),
       btn('백업 내보내기', 'small', exportData),
       btn('백업 가져오기', 'small', importData)
     ]));
