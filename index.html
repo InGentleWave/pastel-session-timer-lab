@@ -579,12 +579,11 @@ button.title-btn:disabled { opacity: 1; }
       ]);
       var actions;
       if (!edit) {
-        /* 일반 화면: 라벨마다 시작·정지만 */
-        actions = h('div', { 'class': 'row actions' }, [
+        /* 일반 화면: 라벨마다 시작·정지만. 정지(완료)된 라벨은 버튼을 숨김 */
+        actions = it.state === 'done' ? null : h('div', { 'class': 'row actions' }, [
           btn('시작', 'mint big', function () { act(function () { return startItem(s, it); }); },
             { disabled: it.state !== 'idle' && it.state !== 'paused' }),
-          btn('정지', 'rose big', function () { act(function () { return stopItem(s, it); }); },
-            { disabled: it.state === 'done' })
+          btn('정지', 'rose big', function () { act(function () { return stopItem(s, it); }); })
         ]);
       } else {
         actions = h('div', { 'class': 'actions' }, [
@@ -596,7 +595,7 @@ button.title-btn:disabled { opacity: 1; }
           moveButtons(s.items, idx, 'move')
         ]);
       }
-      root.appendChild(h('div', { 'class': 'card ' + it.state }, [head, actions]));
+      root.appendChild(h('div', { 'class': 'card ' + it.state }, actions ? [head, actions] : [head]));
     });
     if (edit) root.appendChild(h('div', { 'class': 'foot' }, [btn('라벨 추가', 'mint tall block', function () { addItem(s); })]));
   }
